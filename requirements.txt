@@ -1,0 +1,14 @@
+blinker
+click
+dnspython
+Flask
+flask-cors
+Flask-SQLAlchemy
+greenlet
+itsdangerous
+Jinja2
+MarkupSafe
+pymongo
+SQLAlchemy
+typing_extensions
+Werkzeug

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Premium Tracker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #1f2937;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+      font-size: 22px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input, select {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #10b981;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .user {
+      background: #e0f2fe;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-left: 6px solid #0ea5e9;
+      border-radius: 6px;
+      position: relative;
+    }
+    .expired {
+      background: #ffe4e6;
+      border-left-color: #f87171;
+    }
+    .actions {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+    }
+    .actions button {
+      background: #3b82f6;
+      color: white;
+      margin-left: 5px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+    .actions button.delete {
+      background: #ef4444;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .status.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .status.info {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  🕒 Time: <span id="clock"></span>
+</header>
+
+<div class="container">
+  <div id="status" class="status info">
+    Connecting to database...
+  </div>
+
+  <form id="userForm">
+    <input type="text" id="name" placeholder="Name" required>
+    <input type="text" id="userId" placeholder="ID" required>
+    <input type="number" id="duration" placeholder="Duration" min="1" required>
+    <select id="unit">
+      <option value="seconds">Seconds</option>
+      <option value="minutes">Minutes</option>
+      <option value="hours">Hours</option>
+      <option value="days">Days</option>
+    </select>
+    <button type="submit">Add User</button>
+  </form>
+
+  <div id="userList"></div>
+</div>
+
+<script>
+  const clock = document.getElementById('clock');
+  const userList = document.getElementById('userList');
+  const statusDiv = document.getElementById('status');
+  let users = [];
+
+  const API_BASE = '/api';
+
+  function showStatus(message, type = 'info') {
+    statusDiv.textContent = message;
+    statusDiv.className = `status ${type}`;
+    if (type !== 'error') {
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 3000);
+    }
+  }
+
+  function updateClock() {
+    const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    clock.textContent = now;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  function convertToSeconds(value, unit) {
+    switch (unit) {
+      case 'minutes': return value * 60;
+      case 'hours': return value * 3600;
+      case 'days': return value * 86400;
+      default: return value;
+    }
+  }
+
+  function formatTime(seconds) {
+    seconds = Math.max(0, seconds);
+    const days = Math.floor(seconds / (3600 * 24));
+    const hours = Math.floor((seconds % (3600 * 24)) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${days}d ${hours}h ${mins}m ${secs}s`;
+  }
+
+  function getEmoji(secondsLeft) {
+    if (secondsLeft <= 0) return '❌';
+    if (secondsLeft <= 3600) return '🟡';
+    return '✅';
+  }
+
+  async function loadUsers() {
+    try {
+      const response = await fetch(`${API_BASE}/users`);
+      const data = await response.json();
+      
+      if (data.success) {
+        users = data.users;
+        renderUsers();
+        showStatus('Database is connected', 'success');
+      } else {
+        showStatus(`Error loading users: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      showStatus(`Connection error: ${error.message}`, 'error');
+    }
+  }
+
+  async function saveUser(name, userId, duration, endTime) {
+    try {
+      const response = await fetch(`${API_BASE}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name,
+          user_id: userId,
+          duration: duration,
+          end_time: endTime
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showStatus('User added successfully', 'success');
+        loadUsers();
+      } else {
+        showStatus(`Error saving user: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      showStatus(`Connection error: ${error.message}`, 'error');
+    }
+  }
+
+  async function updateUser(userId, duration, endTime) {
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          duration: duration,
+          end_time: endTime
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showStatus('User updated successfully', 'success');
+        loadUsers();
+      } else {
+        showStatus(`Error updating user: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      showStatus(`Connection error: ${error.message}`, 'error');
+    }
+  }
+
+  async function deleteUserFromDB(userId) {
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}`, {
+        method: 'DELETE'
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showStatus('User deleted successfully', 'success');
+        loadUsers();
+      } else {
+        showStatus(`Error deleting user: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      showStatus(`Connection error: ${error.message}`, 'error');
+    }
+  }
+
+  function renderUsers() {
+    userList.innerHTML = '';
+    const now = Date.now();
+
+    users.sort((a, b) => {
+      const aLeft = a.end_time - now;
+      const bLeft = b.end_time - now;
+      return (aLeft > 0 ? aLeft : Infinity) - (bLeft > 0 ? bLeft : Infinity);
+    });
+
+    users.forEach((user) => {
+      const secondsLeft = Math.floor((user.end_time - now) / 1000);
+      const div = document.createElement('div');
+      div.className = 'user' + (secondsLeft <= 0 ? ' expired' : '');
+      div.innerHTML = `
+        <strong>${user.name}</strong> (ID: ${user.user_id})<br>
+        ⏳ ${formatTime(secondsLeft)}
+        <span style="float:right">${getEmoji(secondsLeft)}</span>
+        <div class="actions">
+          <button onclick="editUser('${user.user_id}')">Edit</button>
+          <button class="delete" onclick="deleteUser('${user.user_id}')">Delete</button>
+        </div>
+      `;
+      userList.appendChild(div);
+    });
+  }
+
+  function deleteUser(userId) {
+    if (confirm('Are you sure you want to delete this user?')) {
+      deleteUserFromDB(userId);
+    }
+  }
+
+  function editUser(userId) {
+    const newDuration = prompt("Enter new duration:");
+    const newUnit = prompt("Unit? (seconds, minutes, hours, days)");
+    const unit = ["seconds", "minutes", "hours", "days"].includes(newUnit) ? newUnit : "seconds";
+    const parsed = parseInt(newDuration);
+
+    if (!isNaN(parsed) && parsed > 0) {
+      const seconds = convertToSeconds(parsed, unit);
+      const endTime = Date.now() + seconds * 1000;
+      updateUser(userId, seconds, endTime);
+    } else {
+      alert("Invalid input!");
+    }
+  }
+
+  document.getElementById('userForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    const id = document.getElementById('userId').value.trim();
+    const durationVal = parseInt(document.getElementById('duration').value);
+    const unit = document.getElementById('unit').value;
+    const seconds = convertToSeconds(durationVal, unit);
+    const endTime = Date.now() + seconds * 1000;
+
+    if (name && id && durationVal > 0) {
+      saveUser(name, id, seconds, endTime);
+      document.getElementById('userForm').reset();
+    }
+  });
+  loadUsers();
+  setInterval(renderUsers, 1000);
+</script>
+
+</body>
+</html>
+
